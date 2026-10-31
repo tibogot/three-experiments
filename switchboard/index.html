@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Switchboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@600&family=Chivo+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the framed switch wall fills the viewport like a gallery wall; controls sit in one strip at the bottom.
+   A single lit-gallery world by choice, so every color is explicit and not themed. */
+:root {
+  --wall: #e8e6e1;
+  --panel: #f5f4f0;
+  --ink: #1f1e1c;
+  --ink-soft: #6e6a62;
+  --amber: #e2600f;
+  --rule: rgba(31, 30, 28, 0.14);
+  --display: "Chivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Chivo Mono", ui-monospace, Menlo, monospace;
+  --step--1: 0.6875rem;
+  --step-0: 0.8125rem;
+  color-scheme: light;
+}
+/* Night: the room lights are off, so the page chrome goes dark with it. */
+:root[data-night="true"] {
+  --wall: #080807;
+  --panel: #161513;
+  --ink: #ecebe6;
+  --ink-soft: #8f8a80;
+  --rule: rgba(236, 235, 230, 0.14);
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--wall); color: var(--ink); font-family: var(--mono); font-size: var(--step-0); overflow: hidden; transition: background-color 1.2s ease, color 1.2s ease; }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+#stage.orbit { cursor: grab; }
+#stage.orbit:active { cursor: grabbing; }
+.dim { display: flex; align-items: center; gap: 8px; }
+.dim input { width: 96px; accent-color: var(--amber); }
+.strip {
+  position: fixed; left: 0; right: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+}
+.strip > * { pointer-events: auto; }
+.top { top: 0; justify-content: space-between; padding-block: calc(14px + env(safe-area-inset-top, 0px)) 0; }
+.bottom { bottom: 0; padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px)); }
+.mark { display: flex; align-items: baseline; gap: 10px; font-family: var(--display); font-size: 0.95rem; }
+.mark small, .label, .hint {
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
+}
+.hint { text-transform: none; letter-spacing: 0.03em; max-width: 36ch; text-align: right; }
+.panel {
+  width: 100%;
+  display: grid; grid-template-columns: minmax(240px, 1fr) auto; gap: 10px 18px; align-items: center;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--rule); border-radius: 6px;
+}
+.msg { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.msg textarea {
+  flex: 1; min-width: 0; resize: none;
+  font: inherit; font-family: var(--display); font-size: 1rem; line-height: 1.25; color: var(--ink);
+  background: transparent; border: 0; border-bottom: 1px solid var(--rule); padding: 4px 2px;
+}
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; justify-content: flex-end; }
+.seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 4px; }
+button {
+  font: inherit; font-size: var(--step--1); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-soft); background: transparent; border: 0; border-radius: 3px; padding: 6px 10px; cursor: pointer;
+}
+button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.plain { border: 1px solid var(--rule); }
+#night[aria-pressed="true"], #sound[aria-pressed="true"] { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+.meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 18px; justify-content: space-between; }
+#count { font-variant-numeric: tabular-nums; }
+button:focus-visible, textarea:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+#notice {
+  position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+  font-family: var(--display); color: var(--ink-soft);
+}
+@media (max-width: 1180px) {
+  .panel { grid-template-columns: minmax(0, 1fr); }
+  .tools { justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  .hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .panel { backdrop-filter: none; } }
+</style>
+
+<p id="notice" hidden>This board needs WebGL 2 or WebGPU, which this browser doesn't provide.</p>
+<canvas id="stage" aria-label="A wall of illuminated rocker switches. Drag across it to flip switches."></canvas>
+
+<header class="strip top">
+  <div class="mark">Switchboard <small>72 × 40 rocker switches</small></div>
+  <p class="hint">Type a message and the switches flip to spell it. Click or drag on the board to flip switches by hand. In Orbit, drag to look around.</p>
+</header>
+
+<footer class="strip bottom">
+  <div class="panel">
+    <label class="msg"><span class="label">Message</span>
+      <textarea id="msg" rows="2" maxlength="60" spellcheck="false" autocomplete="off">Hello World.</textarea>
+    </label>
+    <div class="tools">
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" id="view-angle" data-view="angle" aria-pressed="true">Angle</button>
+        <button type="button" id="view-front" data-view="front" aria-pressed="false">Front</button>
+        <button type="button" id="view-close" data-view="close" aria-pressed="false">Close-up</button>
+        <button type="button" id="view-orbit" data-view="orbit" aria-pressed="false">Orbit</button>
+      </div>
+      <label class="dim"><span class="label">Dimmer</span>
+        <input type="range" id="dim" min="0.08" max="1.4" step="0.01" value="1" aria-describedby="dim-out">
+        <output class="label" id="dim-out">100%</output>
+      </label>
+      <button type="button" class="plain" id="night" aria-pressed="false">Night</button>
+      <button type="button" class="plain" id="invert">Invert</button>
+      <button type="button" class="plain" id="clear">Clear</button>
+      <button type="button" class="plain" id="sound" aria-pressed="true">Sound on</button>
+    </div>
+    <div class="meta">
+      <span class="label" id="fit">Fits 4 lines of 11 characters</span>
+      <span class="label" id="count">0 of 2,880 switches on</span>
+    </div>
+  </div>
+</footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.tsl.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import { pass, mrt, output, emissive, attribute, positionGeometry, positionWorld, texture, vec2, vec4, color, uniform, mix, exp } from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (id) => document.getElementById(id);
+
+// ---- Board dimensions (1 unit = one switch pitch, about 22 mm) -------------
+const COLS = 72, ROWS = 40, N = COLS * ROWS;
+const PX = 1.0, PY = 1.18;
+const GW = COLS * PX, GH = ROWS * PY;
+const GX0 = -GW / 2, GY0 = -GH / 2;                 // bottom-left corner of the grid
+const TILT = THREE.MathUtils.degToRad(11);
+const CAP_Z = 0.05;                                   // rocker pivot height above the backplate
+const cellX = (c) => GX0 + (c + 0.5) * PX;
+const cellY = (r) => GY0 + GH - (r + 0.5) * PY;       // row 0 is the top row
+
+// ---- 5×7 dot-matrix font (row 8 holds descenders) ---------------------------
+const FONT = {
+  'A': '.###. #...# #...# ##### #...# #...# #...# .....',
+  'B': '####. #...# #...# ####. #...# #...# ####. .....',
+  'C': '.###. #...# #.... #.... #.... #...# .###. .....',
+  'D': '####. #...# #...# #...# #...# #...# ####. .....',
+  'E': '##### #.... #.... ####. #.... #.... ##### .....',
+  'F': '##### #.... #.... ####. #.... #.... #.... .....',
+  'G': '.###. #...# #.... #.### #...# #...# .#### .....',
+  'H': '#...# #...# #...# ##### #...# #...# #...# .....',
+  'I': '.###. ..#.. ..#.. ..#.. ..#.. ..#.. .###. .....',
+  'J': '..### ...#. ...#. ...#. ...#. #..#. .##.. .....',
+  'K': '#...# #..#. #.#.. ##... #.#.. #..#. #...# .....',
+  'L': '#.... #.... #.... #.... #.... #.... ##### .....',
+  'M': '#...# ##.## #.#.# #.#.# #...# #...# #...# .....',
+  'N': '#...# #...# ##..# #.#.# #..## #...# #...# .....',
+  'O': '.###. #...# #...# #...# #...# #...# .###. .....',
+  'P': '####. #...# #...# ####. #.... #.... #.... .....',
+  'Q': '.###. #...# #...# #...# #.#.# #..#. .##.# .....',
+  'R': '####. #...# #...# ####. #.#.. #..#. #...# .....',
+  'S': '.#### #.... #.... .###. ....# ....# ####. .....',
+  'T': '##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#.. .....',
+  'U': '#...# #...# #...# #...# #...# #...# .###. .....',
+  'V': '#...# #...# #...# #...# #...# .#.#. ..#.. .....',
+  'W': '#...# #...# #...# #.#.# #.#.# #.#.# .#.#. .....',
+  'X': '#...# #...# .#.#. ..#.. .#.#. #...# #...# .....',
+  'Y': '#...# #...# .#.#. ..#.. ..#.. ..#.. ..#.. .....',
+  'Z': '##### ....# ...#. ..#.. .#... #.... ##### .....',
+  'a': '..... ..... .###. ....# .#### #...# .#### .....',
+  'b': '#.... #.... #.##. ##..# #...# #...# ####. .....',
+  'c': '..... ..... .###. #.... #.... #...# .###. .....',
+  'd': '....# ....# .##.# #..## #...# #...# .#### .....',
+  'e': '..... ..... .###. #...# ##### #.... .###. .....',
+  'f': '..##. .#..# .#... ###.. .#... .#... .#... .....',
+  'g': '..... ..... .#### #...# #...# .#### ....# .###.',
+  'h': '#.... #.... #.##. ##..# #...# #...# #...# .....',
+  'i': '..#.. ..... .##.. ..#.. ..#.. ..#.. .###. .....',
+  'j': '...#. ..... ..##. ...#. ...#. ...#. #..#. .##..',
+  'k': '#.... #.... #..#. #.#.. ##... #.#.. #..#. .....',
+  'l': '.##.. ..#.. ..#.. ..#.. ..#.. ..#.. .###. .....',
+  'm': '..... ..... ##.#. #.#.# #.#.# #.#.# #.#.# .....',
+  'n': '..... ..... #.##. ##..# #...# #...# #...# .....',
+  'o': '..... ..... .###. #...# #...# #...# .###. .....',
+  'p': '..... ..... ####. #...# #...# ####. #.... #....',
+  'q': '..... ..... .#### #...# #...# .#### ....# ....#',
+  'r': '..... ..... #.##. ##..# #.... #.... #.... .....',
+  's': '..... ..... .###. #.... .###. ....# ####. .....',
+  't': '.#... .#... ###.. .#... .#... .#..# ..##. .....',
+  'u': '..... ..... #...# #...# #...# #..## .##.# .....',
+  'v': '..... ..... #...# #...# #...# .#.#. ..#.. .....',
+  'w': '..... ..... #...# #...# #.#.# #.#.# .#.#. .....',
+  'x': '..... ..... #...# .#.#. ..#.. .#.#. #...# .....',
+  'y': '..... ..... #...# #...# #...# .#### ....# .###.',
+  'z': '..... ..... ##### ...#. ..#.. .#... ##### .....',
+  '0': '.###. #...# #..## #.#.# ##..# #...# .###. .....',
+  '1': '..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###. .....',
+  '2': '.###. #...# ....# ...#. ..#.. .#... ##### .....',
+  '3': '##### ...#. ..#.. ...#. ....# #...# .###. .....',
+  '4': '...#. ..##. .#.#. #..#. ##### ...#. ...#. .....',
+  '5': '##### #.... ####. ....# ....# #...# .###. .....',
+  '6': '..##. .#... #.... ####. #...# #...# .###. .....',
+  '7': '##### ....# ...#. ..#.. .#... .#... .#... .....',
+  '8': '.###. #...# #...# .###. #...# #...# .###. .....',
+  '9': '.###. #...# #...# .#### ....# ...#. .##.. .....',
+  ' ': '..... ..... ..... ..... ..... ..... ..... .....',
+  '.': '..... ..... ..... ..... ..... .##.. .##.. .....',
+  ',': '..... ..... ..... ..... ..... .##.. ..#.. .#...',
+  '!': '..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#.. .....',
+  '?': '.###. #...# ....# ...#. ..#.. ..... ..#.. .....',
+  "'": '..#.. ..#.. .#... ..... ..... ..... ..... .....',
+  '"': '.#.#. .#.#. ..... ..... ..... ..... ..... .....',
+  ':': '..... .##.. .##.. ..... .##.. .##.. ..... .....',
+  ';': '..... .##.. .##.. ..... .##.. ..#.. .#... .....',
+  '-': '..... ..... ..... ##### ..... ..... ..... .....',
+  '_': '..... ..... ..... ..... ..... ..... ##### .....',
+  '+': '..... ..#.. ..#.. ##### ..#.. ..#.. ..... .....',
+  '=': '..... ..... ##### ..... ##### ..... ..... .....',
+  '/': '..... ....# ...#. ..#.. .#... #.... ..... .....',
+  '(': '...#. ..#.. .#... .#... .#... ..#.. ...#. .....',
+  ')': '.#... ..#.. ...#. ...#. ...#. ..#.. .#... .....',
+  '#': '.#.#. .#.#. ##### .#.#. ##### .#.#. .#.#. .....',
+  '@': '.###. #...# ....# .##.# #.#.# #.#.# .###. .....',
+  '&': '.##.. #..#. #.#.. .#... #.#.# #..#. .##.# .....',
+  '*': '..... ..#.. #.#.# .###. #.#.# ..#.. ..... .....',
+  '%': '##... ##..# ...#. ..#.. .#... #..## ...## .....',
+  '<': '...#. ..#.. .#... #.... .#... ..#.. ...#. .....',
+  '>': '.#... ..#.. ...#. ....# ...#. ..#.. .#... .....',
+  '$': '..#.. .#### #.#.. .###. ..#.# ####. ..#.. .....',
+  '♥': '..... .#.#. ##### ##### .###. ..#.. ..... .....',
+};
+const CHAR_W = 6, LINE_H = 10, MARGIN = 1;
+const MAX_CHARS = Math.floor((COLS - 2 * MARGIN + 1) / CHAR_W);
+const MAX_LINES = Math.floor((ROWS - 2 * MARGIN + 2) / LINE_H);
+$('fit').textContent = `Fits ${MAX_LINES} lines of ${MAX_CHARS} characters`;
+
+function wrap(text) {
+  const out = [];
+  for (const para of text.split('\n')) {
+    let line = '';
+    for (let word of para.split(/\s+/).filter(Boolean)) {
+      while (word.length > MAX_CHARS) {            // hard-break words longer than a line
+        if (line) { out.push(line); line = ''; }
+        out.push(word.slice(0, MAX_CHARS)); word = word.slice(MAX_CHARS);
+      }
+      if (!word) continue;
+      if (!line) line = word;
+      else if (line.length + 1 + word.length <= MAX_CHARS) line += ' ' + word;
+      else { out.push(line); line = word; }
+    }
+    out.push(line);
+  }
+  while (out.length && !out[out.length - 1]) out.pop();
+  return out;
+}
+
+function layout(text) {
+  const grid = new Uint8Array(N);
+  const all = wrap(text);
+  const lines = all.slice(0, MAX_LINES);
+  const widest = Math.max(1, ...lines.map((l) => l.length));
+  const x0 = Math.floor((COLS - (widest * CHAR_W - 1)) / 2);
+  const y0 = Math.floor((ROWS - (lines.length * LINE_H - 2)) / 2);
+  lines.forEach((line, li) => {
+    [...line].forEach((ch, ci) => {
+      const g = (FONT[ch] || FONT['?']).split(' ');
+      g.forEach((row, ry) => {
+        for (let rx = 0; rx < 5; rx++) {
+          if (row[rx] !== '#') continue;
+          const c = x0 + ci * CHAR_W + rx, r = y0 + li * LINE_H + ry;
+          if (c >= 0 && c < COLS && r >= 0 && r < ROWS) grid[r * COLS + c] = 1;
+        }
+      });
+    });
+  });
+  return { grid, overflow: all.length > MAX_LINES };
+}
+
+// ---- Renderer ---------------------------------------------------------------
+const canvas = $('stage');
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+try { await renderer.init(); }
+catch (err) { $('notice').hidden = false; canvas.hidden = true; throw err; }
+
+// Real light from every lit lamp needs Forward+ clustered shading (r18x), which runs
+// on compute shaders and so only exists on the WebGPU backend. On WebGL 2 the lamps
+// light their neighbours through the spill texture alone.
+const LAMP_LIGHTS = 768;
+const lampLightsOn = renderer.backend.isWebGPUBackend === true;
+if (lampLightsOn) renderer.lighting = new ClusteredLighting(LAMP_LIGHTS, 32, 24, 128);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#e8e6e1');
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.26;
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 3000);
+
+// Soft gallery key light from the upper left.
+const key = new THREE.DirectionalLight(0xfff4e6, 1.25);
+key.position.set(-30, 40, 55);
+key.castShadow = true;
+key.shadow.mapSize.set(4096, 4096);
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.02;
+key.shadow.radius = 3;
+Object.assign(key.shadow.camera, { left: -46, right: 46, top: 34, bottom: -34, near: 10, far: 160 });
+scene.add(key);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8f8a82, 0.35);
+scene.add(hemi);
+
+// A fixed pool of small point lights, parked out of reach until a lamp claims one.
+const LAMP_RANGE = 2.4, LAMP_CANDELA = 0.35;
+const lampLights = [];
+if (lampLightsOn) {
+  for (let k = 0; k < LAMP_LIGHTS; k++) {
+    const l = new THREE.PointLight(0xff6c1a, 0, LAMP_RANGE, 2);
+    l.position.set(0, 0, -500);
+    scene.add(l);
+    lampLights.push(l);
+  }
+}
+
+// ---- Live lamp state shared with the shaders ---------------------------------
+// aGlow drives each cap's lamp; glowTex is the same data as a tiny texture so
+// housings, rails and backplate pick up spill light from neighbouring lamps.
+const glow = new Float32Array(N);
+const glowAttr = new THREE.InstancedBufferAttribute(glow, 1);
+glowAttr.setUsage(THREE.DynamicDrawUsage);
+const glowData = new Uint8Array(N * 4);
+const glowTex = new THREE.DataTexture(glowData, COLS, ROWS, THREE.RGBAFormat);
+glowTex.magFilter = glowTex.minFilter = THREE.LinearFilter;
+glowTex.needsUpdate = true;
+
+const uLamp = uniform(1.0);
+const uSpill = uniform(1.0);     // raised at night, when spill is the main light on the hardware
+const AMBER = color(0xff5a0a), AMBER_DEEP = color(0xff4a00), FILAMENT = color(0xffb032);
+const spillUV = vec2(positionWorld.x.sub(GX0).div(GW), positionWorld.y.sub(GY0).div(GH));
+const spill = texture(glowTex, spillUV).r.mul(uSpill).mul(uLamp);
+
+// ---- Geometry -----------------------------------------------------------------
+function roundedRect(path, w, h, r) {
+  path.moveTo(-w / 2 + r, -h / 2);
+  path.lineTo(w / 2 - r, -h / 2); path.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
+  path.lineTo(w / 2, h / 2 - r); path.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
+  path.lineTo(-w / 2 + r, h / 2); path.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
+  path.lineTo(-w / 2, -h / 2 + r); path.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
+  return path;
+}
+
+// Rocker cap: a side profile with a shallow concave top, extruded across the width.
+function capGeometry() {
+  const L = 0.86, W = 0.62;
+  const s = new THREE.Shape();
+  s.moveTo(-L / 2, -0.02);
+  s.lineTo(L / 2, -0.02);
+  const steps = 10;
+  for (let i = 0; i <= steps; i++) {
+    const y = L / 2 - (i / steps) * L;
+    const u = y / (L / 2);
+    s.lineTo(y, 0.29 - 0.055 * (1 - u * u));
+  }
+  s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, {
+    depth: W - 0.06, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.028, bevelSegments: 2, curveSegments: 4,
+  });
+  // (x, y, z) of the profile -> (across, along, up): a pure axis rotation, so winding is preserved.
+  const pos = g.attributes.position, nor = g.attributes.normal;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    pos.setXYZ(i, z - (W - 0.06) / 2, x, y);
+    const nx = nor.getX(i), ny = nor.getY(i), nz = nor.getZ(i);
+    nor.setXYZ(i, nz, nx, ny);
+  }
+  g.computeBoundingBox(); g.computeBoundingSphere();
+  return g;
+}
+
+function housingGeometry() {
+  const s = roundedRect(new THREE.Shape(), 0.84, 1.08, 0.09);
+  s.holes.push(roundedRect(new THREE.Path(), 0.7, 0.94, 0.05));
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.02, bevelSegments: 1, curveSegments: 3 });
+  return g;
+}
+
+// ---- Materials (TSL node materials) -------------------------------------------
+const lamp = attribute('aGlow', 'float');
+const p = positionGeometry;
+const hot = exp(p.x.mul(p.x).div(0.03).add(p.y.mul(p.y).div(0.07)).negate()); // filament hot spot in the cap centre
+
+const capMat = new THREE.MeshPhysicalNodeMaterial({
+  color: 0xa63a0c, roughness: 0.3, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.3, specularIntensity: 0.6,
+});
+capMat.emissiveNode = mix(AMBER_DEEP, FILAMENT, hot.mul(uLamp.min(1).pow(0.7)))   // a dimmed filament runs redder
+  .mul(hot.mul(2.6).add(0.8)).mul(lamp).mul(uLamp)          // lit lamp behind translucent plastic
+  .add(AMBER_DEEP.mul(spill.mul(0.16).add(0.004)));            // scatter from neighbours + ambient translucency
+
+const housingMat = new THREE.MeshStandardNodeMaterial({ color: 0x2a2b2e, roughness: 0.48, metalness: 0.05 });
+housingMat.emissiveNode = AMBER.mul(spill.mul(0.06));
+
+const railMat = new THREE.MeshStandardNodeMaterial({ color: 0x3a3c40, roughness: 0.38, metalness: 0.65 });
+railMat.emissiveNode = AMBER.mul(spill.mul(0.05));
+
+const backMat = new THREE.MeshStandardNodeMaterial({ color: 0x1b1c1e, roughness: 0.7 });
+backMat.emissiveNode = AMBER.mul(spill.mul(0.09));
+
+// Oak: a procedural grain texture, drawn once.
+function oakTexture(vertical) {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#c69a68'; g.fillRect(0, 0, c.width, c.height);
+  let seed = vertical ? 7 : 3;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 260; i++) {
+    const y = rnd() * c.height, a = 0.04 + rnd() * 0.12, w = 0.5 + rnd() * 2.2;
+    const amp = 2 + rnd() * 6, freq = 0.002 + rnd() * 0.006, ph = rnd() * 6.28;
+    g.strokeStyle = rnd() > 0.5 ? `rgba(120,78,40,${a})` : `rgba(235,200,150,${a})`;
+    g.lineWidth = w;
+    g.beginPath();
+    for (let x = 0; x <= c.width; x += 16) {
+      const yy = y + Math.sin(x * freq + ph) * amp;
+      x === 0 ? g.moveTo(x, yy) : g.lineTo(x, yy);
+    }
+    g.stroke();
+  }
+  for (let i = 0; i < 40; i++) {                               // medullary flecks typical of quarter-sawn oak
+    g.fillStyle = `rgba(230,195,145,${0.08 + rnd() * 0.1})`;
+    g.fillRect(rnd() * c.width, rnd() * c.height, 6 + rnd() * 18, 1 + rnd() * 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  if (vertical) { t.rotation = Math.PI / 2; t.center.set(0.5, 0.5); }
+  return t;
+}
+const oakH = new THREE.MeshStandardNodeMaterial({ map: oakTexture(false), roughness: 0.62 });
+const oakV = new THREE.MeshStandardNodeMaterial({ map: oakTexture(true), roughness: 0.62 });
+const wallMat = new THREE.MeshStandardNodeMaterial({ color: 0xe6e3dd, roughness: 0.95 });
+
+// ---- Build the board ------------------------------------------------------------
+const board = new THREE.Group();
+scene.add(board);
+
+const caps = new THREE.InstancedMesh(capGeometry(), capMat, N);
+caps.geometry.setAttribute('aGlow', glowAttr);
+caps.castShadow = caps.receiveShadow = true;
+caps.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+caps.frustumCulled = false;
+
+const housings = new THREE.InstancedMesh(housingGeometry(), housingMat, N);
+housings.castShadow = housings.receiveShadow = true;
+housings.frustumCulled = false;
+
+const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v3 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+const xAxis = new THREE.Vector3(1, 0, 0);
+function setCap(i, tilt) {
+  const c = i % COLS, r = (i / COLS) | 0;
+  q.setFromAxisAngle(xAxis, tilt);
+  v3.set(cellX(c), cellY(r), CAP_Z);
+  caps.setMatrixAt(i, m4.compose(v3, q, one));
+}
+for (let i = 0; i < N; i++) {
+  const c = i % COLS, r = (i / COLS) | 0;
+  housings.setMatrixAt(i, m4.makeTranslation(cellX(c), cellY(r), 0.06));
+  setCap(i, -TILT);
+}
+board.add(caps, housings);
+
+// Mounting rails between rows, visible through the gaps.
+const rails = new THREE.InstancedMesh(new THREE.BoxGeometry(GW + 0.4, 0.1, 0.08), railMat, ROWS + 1);
+for (let r = 0; r <= ROWS; r++) rails.setMatrixAt(r, m4.makeTranslation(0, GY0 + r * PY, 0.04));
+rails.receiveShadow = true;
+board.add(rails);
+
+const PAD = 0.9;
+const back = new THREE.Mesh(new THREE.PlaneGeometry(GW + 2 * PAD, GH + 2 * PAD), backMat);
+back.receiveShadow = true;
+board.add(back);
+
+// Shadow-box frame in oak: narrow face, deep sides.
+const FW = 0.55, FD = 2.2, FZ = -1.2;
+const OW = GW + 2 * PAD, OH = GH + 2 * PAD;
+function framePiece(w, h, x, y, mat) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, FD), mat);
+  m.position.set(x, y, FZ + FD / 2);
+  m.castShadow = m.receiveShadow = true;
+  board.add(m);
+}
+framePiece(OW + 2 * FW, FW, 0, OH / 2 + FW / 2, oakH);
+framePiece(OW + 2 * FW, FW, 0, -OH / 2 - FW / 2, oakH);
+framePiece(FW, OH, -OW / 2 - FW / 2, 0, oakV);
+framePiece(FW, OH, OW / 2 + FW / 2, 0, oakV);
+
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1200), wallMat);   // large enough that orbiting never shows its edge
+wall.position.z = FZ;
+wall.receiveShadow = true;
+scene.add(wall);
+
+// ---- Post: lamps bloom through the emissive MRT channel ---------------------------
+const renderPipeline = new THREE.RenderPipeline(renderer);
+const scenePass = pass(scene, camera, { samples: 4 });
+scenePass.setMRT(mrt({ output, emissive: vec4(emissive, output.a) }));
+const glowPass = bloom(scenePass.getTextureNode('emissive'), 0.6, 0.35, 0.1);
+renderPipeline.outputNode = scenePass.getTextureNode('output').add(glowPass);
+
+// ---- Switch state + animation -----------------------------------------------------
+const state = new Uint8Array(N);        // what each switch is set to
+const tiltNow = new Float32Array(N).fill(-TILT);
+const flipAt = new Float64Array(N).fill(-1);   // scheduled flip time (ms), -1 = none
+const flipStart = new Float64Array(N).fill(-1);
+const flipFrom = new Float32Array(N);
+const litAt = new Float64Array(N);
+const FLIP_MS = 75;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function flip(i, on, at) {
+  if (state[i] === on && flipAt[i] < 0) return;
+  state[i] = on;
+  flipAt[i] = at;
+}
+
+let onCount = 0;
+function applyGrid(grid, sweep = true) {
+  const now = performance.now();
+  for (let i = 0; i < N; i++) {
+    if (grid[i] === state[i]) continue;
+    const c = i % COLS, r = (i / COLS) | 0;
+    const delay = sweep && !reduceMotion ? c * 11 + r * 3 + Math.random() * 25 : 0;
+    flip(i, grid[i], now + delay);
+  }
+}
+
+// ---- Sound: a short synthesized mechanical click per flip ---------------------------
+let audio = null, clickBuf = null, soundOn = true;
+function ensureAudio() {
+  if (audio || !soundOn) return;
+  try {
+    audio = new (window.AudioContext || window.webkitAudioContext)();
+    const len = Math.floor(audio.sampleRate * 0.03);
+    clickBuf = audio.createBuffer(1, len, audio.sampleRate);
+    const d = clickBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const t = i / audio.sampleRate;
+      d[i] = (Math.random() * 2 - 1) * Math.exp(-t * 260) * 0.9 + Math.sin(t * 2 * Math.PI * 2400) * Math.exp(-t * 400) * 0.5;
+    }
+  } catch (e) { audio = null; }
+}
+let clicksThisFrame = 0;
+function click(strength = 1) {
+  if (!audio || !soundOn || clicksThisFrame > 3) return;
+  clicksThisFrame++;
+  const src = audio.createBufferSource();
+  src.buffer = clickBuf;
+  src.playbackRate.value = 0.8 + Math.random() * 0.45;
+  const filt = audio.createBiquadFilter();
+  filt.type = 'bandpass'; filt.frequency.value = 1800 + Math.random() * 1600; filt.Q.value = 0.9;
+  const gain = audio.createGain();
+  gain.gain.value = 0.22 * strength;
+  src.connect(filt).connect(gain).connect(audio.destination);
+  src.start();
+}
+window.addEventListener('pointerdown', ensureAudio, { capture: true });
+window.addEventListener('keydown', ensureAudio, { capture: true });
+
+// ---- Camera views --------------------------------------------------------------------
+const camPos = new THREE.Vector3(), camTarget = new THREE.Vector3();
+const goalPos = new THREE.Vector3(), goalTarget = new THREE.Vector3();
+let view = 'angle', fitDist = 60, parallax = new THREE.Vector2(), parallaxGoal = new THREE.Vector2();
+
+function viewGoal(name) {
+  const aspect = window.innerWidth / window.innerHeight;
+  const half = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const fw = OW + 2 * FW, fh = OH + 2 * FW;
+  const uiPad = window.innerWidth < 720 ? 1.85 : window.innerWidth < 1180 ? 1.65 : 1.5;
+  const dist = Math.max((fh * uiPad / 2) / Math.tan(half), (fw * 1.08 / 2) / (Math.tan(half) * aspect));
+  fitDist = dist;
+  if (name === 'orbit') return;
+  if (name === 'front') {
+    goalTarget.set(0, -fh * 0.03, 0);
+    goalPos.set(0, -fh * 0.03, dist);
+  } else if (name === 'angle') {
+    goalTarget.set(-fw * 0.03, -fh * 0.03, 0);
+    goalPos.set(dist * 0.4, dist * 0.04, dist * 0.98);
+  } else {
+    const c = 20, r = 14;  // inside the first line of the default message
+    goalTarget.set(cellX(c), cellY(r), 0.2);
+    goalPos.set(cellX(c) - 7.2, cellY(r) - 3.0, 6.6);
+  }
+}
+// Orbit: free camera. Drag rotates, scroll or pinch zooms, right-drag pans; a plain click still flips a switch.
+const orbit = new OrbitControls(camera, canvas);
+orbit.enabled = false;
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.08;
+orbit.minDistance = 2.5;
+orbit.minAzimuthAngle = -THREE.MathUtils.degToRad(80);    // stay in front of the wall
+orbit.maxAzimuthAngle = THREE.MathUtils.degToRad(80);
+orbit.minPolarAngle = THREE.MathUtils.degToRad(15);
+orbit.maxPolarAngle = THREE.MathUtils.degToRad(165);
+orbit.addEventListener('change', () => {                  // keep the pivot on the board
+  orbit.target.x = THREE.MathUtils.clamp(orbit.target.x, GX0, -GX0);
+  orbit.target.y = THREE.MathUtils.clamp(orbit.target.y, GY0, -GY0);
+});
+
+function setView(name) {
+  if (view === 'orbit' && name !== 'orbit') {             // hand the free camera back to the eased views
+    camPos.copy(camera.position);
+    camTarget.copy(orbit.target);
+  }
+  view = name;
+  viewGoal(name);
+  orbit.enabled = name === 'orbit';
+  canvas.classList.toggle('orbit', orbit.enabled);
+  if (orbit.enabled) {
+    orbit.target.copy(camTarget);
+    orbit.maxDistance = fitDist * 1.8;
+    orbit.update();
+  }
+  document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === name)));
+}
+document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  viewGoal(view);
+}
+window.addEventListener('resize', resize);
+resize();
+camPos.copy(goalPos); camTarget.copy(goalTarget);
+
+// ---- Drawing on the board ------------------------------------------------------------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -0.3);
+const hit = new THREE.Vector3();
+let painting = false, paintValue = 1, lastCell = null;
+
+function cellAt(e) {
+  const rect = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+  parallaxGoal.copy(ndc);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.ray.intersectPlane(plane, hit)) return null;
+  const c = Math.floor((hit.x - GX0) / PX), r = Math.floor((GY0 + GH - hit.y) / PY);
+  return c >= 0 && c < COLS && r >= 0 && r < ROWS ? [c, r] : null;
+}
+function paintLine(a, b) {
+  let [x0, y0] = a; const [x1, y1] = b;
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  const now = performance.now();
+  for (;;) {
+    flip(y0 * COLS + x0, paintValue, now);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+let downAt = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (view === 'orbit') { downAt = [e.clientX, e.clientY]; return; }
+  const cell = cellAt(e);
+  if (!cell) return;
+  canvas.setPointerCapture(e.pointerId);
+  painting = true;
+  paintValue = state[cell[1] * COLS + cell[0]] ? 0 : 1;
+  lastCell = cell;
+  paintLine(cell, cell);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (view === 'orbit') return;
+  const cell = cellAt(e);
+  if (painting && cell) { paintLine(lastCell, cell); lastCell = cell; }
+});
+const stopPaint = () => { painting = false; lastCell = null; };
+canvas.addEventListener('pointerup', (e) => {
+  if (view === 'orbit' && downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5) {
+    const cell = cellAt(e);
+    if (cell) { const i = cell[1] * COLS + cell[0]; flip(i, state[i] ? 0 : 1, performance.now()); }
+  }
+  downAt = null;
+  stopPaint();
+});
+canvas.addEventListener('pointercancel', stopPaint);
+canvas.addEventListener('pointerleave', () => parallaxGoal.set(0, 0));
+
+// ---- Controls ---------------------------------------------------------------------------
+const msg = $('msg');
+let typeTimer = 0;
+function writeMessage() {
+  const { grid, overflow } = layout(msg.value);
+  $('fit').textContent = overflow
+    ? `Too long: only the first ${MAX_LINES} lines fit`
+    : `Fits ${MAX_LINES} lines of ${MAX_CHARS} characters`;
+  applyGrid(grid);
+}
+msg.addEventListener('input', () => { clearTimeout(typeTimer); typeTimer = setTimeout(writeMessage, 260); });
+$('clear').addEventListener('click', () => applyGrid(new Uint8Array(N)));
+
+// ---- Night mode: the room lights go out and the lamps light the board -----------------
+let night = false, nightT = 0, bloomBase = 0.6, bloomView = 1;
+const DAY = { key: 1.25, hemi: 0.35, env: 0.26, spill: 1, bloom: 0.6, radius: 0.35, exposure: 1.0, bg: new THREE.Color('#e8e6e1'), keyColor: new THREE.Color(0xfff4e6) };
+const NIGHT = { key: 0.025, hemi: 0.012, env: 0.01, spill: lampLightsOn ? 1.2 : 1.8, bloom: 0.85, radius: 0.45, exposure: 1.2, bg: new THREE.Color('#000000'), keyColor: new THREE.Color(0x9fb4ff) };
+function setNight(on) {
+  night = on;
+  document.documentElement.dataset.night = String(on);
+  const b = $('night');
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? 'Day' : 'Night';
+  click(1.4);                                    // the room light switch
+}
+$('night').addEventListener('click', () => setNight(!night));
+$('dim').addEventListener('input', (e) => {
+  uLamp.value = parseFloat(e.target.value);
+  $('dim-out').textContent = `${Math.round(uLamp.value * 100)}%`;
+  updateLampLights();
+});
+function applyNight(t) {
+  const L = (a, b) => a + (b - a) * t;
+  key.intensity = L(DAY.key, NIGHT.key);
+  key.color.lerpColors(DAY.keyColor, NIGHT.keyColor, t);
+  hemi.intensity = L(DAY.hemi, NIGHT.hemi);
+  scene.environmentIntensity = L(DAY.env, NIGHT.env);
+  scene.background.lerpColors(DAY.bg, NIGHT.bg, t);
+  uSpill.value = L(DAY.spill, NIGHT.spill);
+  bloomBase = L(DAY.bloom, NIGHT.bloom);
+  glowPass.radius.value = L(DAY.radius, NIGHT.radius);
+  renderer.toneMappingExposure = L(DAY.exposure, NIGHT.exposure);
+}
+
+// Hand the light pool to lit lamps. With more lit lamps than lights, every
+// stride-th lamp gets one and carries its skipped neighbours' share.
+function updateLampLights() {
+  if (!lampLightsOn) return;
+  let lit = 0;
+  for (let i = 0; i < N; i++) if (glow[i] > 0.02) lit++;
+  const stride = Math.max(1, Math.ceil(lit / LAMP_LIGHTS));
+  let k = 0, seen = 0;
+  for (let i = 0; i < N && k < LAMP_LIGHTS; i++) {
+    if (glow[i] <= 0.02 || seen++ % stride !== 0) continue;
+    const l = lampLights[k++];
+    l.position.set(cellX(i % COLS), cellY((i / COLS) | 0), 0.55);
+    l.intensity = glow[i] * LAMP_CANDELA * stride * uLamp.value;
+  }
+  for (; k < LAMP_LIGHTS; k++) {
+    const l = lampLights[k];
+    if (l.intensity === 0) break;               // the rest are already parked
+    l.intensity = 0;
+    l.position.z = -500;
+  }
+}
+$('invert').addEventListener('click', () => applyGrid(state.map((s) => 1 - s)));
+$('sound').addEventListener('click', (e) => {
+  soundOn = !soundOn;
+  e.currentTarget.setAttribute('aria-pressed', String(soundOn));
+  e.currentTarget.textContent = soundOn ? 'Sound on' : 'Sound off';
+  if (soundOn) ensureAudio();
+});
+
+// ---- Frame loop ---------------------------------------------------------------------------
+const countEl = $('count');
+let lastCount = -1, prev = performance.now();
+const ease = (t) => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }; // snap with a little overshoot
+
+renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  const dt = Math.min((now - prev) / 1000, 0.05);
+  prev = now;
+  clicksThisFrame = 0;
+  let matrices = false, lamps = false, flipped = 0;
+  onCount = 0;
+
+  for (let i = 0; i < N; i++) {
+    if (flipAt[i] >= 0 && now >= flipAt[i]) {
+      flipAt[i] = -1;
+      flipStart[i] = now;
+      flipFrom[i] = tiltNow[i];
+      if (state[i]) litAt[i] = now;
+      flipped++;
+    }
+    if (flipStart[i] >= 0) {
+      const t = Math.min(1, (now - flipStart[i]) / FLIP_MS);
+      const to = state[i] ? TILT : -TILT;
+      tiltNow[i] = flipFrom[i] + (to - flipFrom[i]) * ease(t);
+      if (t >= 1) { tiltNow[i] = to; flipStart[i] = -1; }
+      setCap(i, tiltNow[i]);
+      matrices = true;
+    }
+    // Lamp: warms up with a brief flicker, cools faster.
+    let target = state[i] && flipAt[i] < 0 && flipStart[i] < 0 ? 1 : 0;
+    const age = now - litAt[i];
+    if (target && age < 110 && !reduceMotion) target *= 0.55 + 0.45 * Math.random();
+    const g0 = glow[i];
+    const rate = target > g0 ? 18 : 30;
+    const g1 = g0 + (target - g0) * (1 - Math.exp(-dt * rate));
+    if (Math.abs(g1 - g0) > 1e-4 || (target === 0 && g0 !== 0 && g1 < 0.002)) {
+      glow[i] = g1 < 0.002 && target === 0 ? 0 : g1;
+      lamps = true;
+    }
+    if (state[i]) onCount++;
+  }
+
+  if (flipped) for (let k = 0; k < Math.min(flipped, 4); k++) click(Math.min(1.6, 0.6 + flipped / 40));
+  if (matrices) caps.instanceMatrix.needsUpdate = true;
+  if (lamps) {
+    for (let i = 0; i < N; i++) {
+      const r = (i / COLS) | 0, c = i % COLS;
+      glowData[((ROWS - 1 - r) * COLS + c) * 4] = Math.round(glow[i] * 255);
+    }
+    glowAttr.needsUpdate = true;
+    glowTex.needsUpdate = true;
+    updateLampLights();
+  }
+
+  const nightGoal = night ? 1 : 0;
+  if (nightT !== nightGoal) {
+    nightT += Math.sign(nightGoal - nightT) * Math.min(Math.abs(nightGoal - nightT), dt / (reduceMotion ? 0.01 : 1.1));
+    applyNight(nightT * nightT * (3 - 2 * nightT));
+  }
+  if (onCount !== lastCount) {
+    countEl.textContent = `${onCount.toLocaleString('en-US')} of ${N.toLocaleString('en-US')} switches on`;
+    lastCount = onCount;
+  }
+
+  // Camera eases toward the chosen view, with a little pointer parallax.
+  const k = 1 - Math.exp(-dt * 3.2);
+  let near;
+  if (view === 'orbit') {
+    orbit.update();
+    near = THREE.MathUtils.clamp(camera.position.distanceTo(orbit.target) / fitDist, 0.45, 1);
+  } else {
+    camPos.lerp(goalPos, k);
+    camTarget.lerp(goalTarget, k);
+    parallax.lerp(parallaxGoal, 1 - Math.exp(-dt * 2));
+    const px = reduceMotion ? 0 : parallax.x * (view === 'close' ? 0.5 : 1.6);
+    const py = reduceMotion ? 0 : parallax.y * (view === 'close' ? 0.35 : 1.0);
+    camera.position.set(camPos.x + px, camPos.y + py, camPos.z);
+    camera.lookAt(camTarget);
+    near = view === 'close' ? 0.45 : 1;
+  }
+
+  // Up close each lamp covers much more of the screen, so its bloom is scaled back.
+  bloomView += (near - bloomView) * k;
+  glowPass.strength.value = bloomBase * bloomView;
+
+  renderPipeline.render();
+});
+
+// Follow the visitor's system theme on first load, then type the default message.
+if (matchMedia('(prefers-color-scheme: dark)').matches) {
+  night = true; nightT = 1; applyNight(1);
+  document.documentElement.dataset.night = 'true';
+  $('night').setAttribute('aria-pressed', 'true');
+  $('night').textContent = 'Day';
+}
+setTimeout(writeMessage, 500);
+</script>
+</html>

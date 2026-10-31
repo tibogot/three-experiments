@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Cutout Type</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one full-bleed WebGL board; hairline control strips pinned to the top and bottom edges.
+   Single paper-white world by choice, so colors are set explicitly and not themed. */
+:root {
+  --paper: #ecedeb;
+  --paper-raised: #f6f7f5;
+  --ink: #23221f;
+  --ink-soft: #6b685f;
+  --mat: #2f6b4f;
+  --rule: rgba(35, 34, 31, 0.14);
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --step--1: 0.6875rem;
+  --step-0: 0.8125rem;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--step-0);
+  overflow: hidden;
+}
+#stage {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  outline: none;
+}
+.strip {
+  position: fixed;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+  z-index: 2;
+}
+.strip > * { pointer-events: auto; }
+.top {
+  top: 0;
+  justify-content: space-between;
+  padding-block: calc(14px + env(safe-area-inset-top, 0px)) 0;
+}
+.bottom {
+  bottom: 0;
+  padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.mark {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+.mark small {
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hint {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  max-width: 34ch;
+  text-align: right;
+}
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  width: 100%;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--paper-raised) 86%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.label {
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 4px; }
+.seg button {
+  font: inherit;
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper-raised); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.field { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.field.grow { flex: 1 1 240px; }
+.field input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-family: var(--display);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 5px 2px;
+}
+.field input[type="range"] { width: 110px; accent-color: var(--mat); }
+#readout {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--step--1);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  white-space: pre;
+  min-width: 17ch;
+  text-align: right;
+  margin-left: auto;
+}
+button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--mat);
+  outline-offset: 2px;
+}
+#fallback {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+  font-family: var(--display);
+  font-size: clamp(2.5rem, 12vw, 7rem);
+  line-height: 0.95;
+  color: var(--paper);
+  text-shadow: -1px -1px 0 #fff, 2px 3px 4px rgba(35, 34, 31, 0.22);
+  text-align: center;
+}
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .hint { display: none; }
+  #readout { min-width: 0; }
+  .field input[type="range"] { width: 90px; }
+}
+</style>
+
+<h1 class="sr-only" id="sr-text">THE NEW DESIGN AGE</h1>
+<div id="fallback" hidden></div>
+<canvas id="stage" aria-hidden="true"></canvas>
+
+<header class="strip top">
+  <div class="mark">Cutout Type <small>12&nbsp;mm board</small></div>
+  <p class="hint">Move over the board and the letters slide in their slots. Click a letter to tap it.</p>
+</header>
+
+<footer class="strip bottom">
+  <div class="panel">
+    <div class="seg" role="group" aria-label="Motion">
+      <button type="button" id="mode-lift" data-mode="lift" aria-pressed="true">Lift</button>
+      <button type="button" id="mode-press" data-mode="press" aria-pressed="false">Press</button>
+      <button type="button" id="mode-wave" data-mode="wave" aria-pressed="false">Wave</button>
+    </div>
+    <label class="field"><span class="label">Travel</span>
+      <input type="range" id="travel" min="0.3" max="1.1" step="0.05" value="1">
+    </label>
+    <label class="field grow"><span class="label">Text</span>
+      <input type="text" id="text" value="THE / NEW / DESIGN / AGE" maxlength="48" spellcheck="false" autocomplete="off" aria-describedby="text-help">
+    </label>
+    <span class="sr-only" id="text-help">Use a slash to start a new line.</span>
+    <output id="readout" aria-live="off">–</output>
+  </div>
+</footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ---- Units -------------------------------------------------------------
+// 1 world unit = 1 em of the display face. The board is T thick and reads as 12 mm.
+const F = 240;                 // glyph raster size in px
+const T = 0.16;                // board thickness
+const MM = 12 / T;             // world units -> mm
+const FONT = `700 ${F}px Archivo, "Helvetica Neue", Arial, sans-serif`;
+const BEVEL = { thickness: 0.006, size: 0.006, offset: -0.0095 }; // letter faces sit a hair inside the slot walls
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('stage');
+
+// ---- Renderer ----------------------------------------------------------
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+} catch (err) {
+  const fb = $('fallback');
+  fb.textContent = $('text').value.replace(/\s*\/\s*/g, '\n');
+  fb.style.whiteSpace = 'pre-line';
+  fb.hidden = false;
+  throw err;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 0.95;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#ecedeb');
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.45;
+
+const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 100);
+
+// Key light from the upper left, so shadows fall down and to the right like the reference.
+const key = new THREE.DirectionalLight(0xfffdf8, 2.8);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.radius = 6;
+key.shadow.bias = -0.0003;
+key.shadow.normalBias = 0.004;
+scene.add(key, key.target);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd6d8d6, 0.25));
+
+const boardMat = new THREE.MeshStandardMaterial({ color: 0xebeceb, roughness: 0.92, metalness: 0 });
+const letterMat = new THREE.MeshStandardMaterial({ color: 0xf3f4f3, roughness: 0.88, metalness: 0 });
+
+// ---- Post: ambient occlusion gives the cut its depth --------------------
+const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+let gtao = null;
+try {
+  gtao = new GTAOPass(scene, camera, 1, 1);
+  gtao.blendIntensity = 0.75;
+  gtao.updateGtaoMaterial({ radius: 0.3, distanceExponent: 1.6, thickness: 1.0, scale: 1.0, samples: 24 });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 8, rings: 2, samples: 16 });
+  composer.addPass(gtao);
+} catch (err) {
+  console.warn('Ambient occlusion unavailable', err);
+}
+composer.addPass(new OutputPass());
+
+// ---- Glyph tracing: raster a glyph, then marching squares -> polygons ----
+const gcan = document.createElement('canvas');
+const gctx = gcan.getContext('2d', { willReadFrequently: true });
+const glyphCache = new Map();
+
+function marchingSquares(a, w, h) {
+  const pts = new Map();
+  const adj = new Map();
+  const iso = 0.5;
+  const point = (id) => {
+    if (!pts.has(id)) {
+      const cell = id >> 1, x = cell % w, y = (cell / w) | 0;
+      const va = a[y * w + x];
+      if (id & 1) { const vb = a[(y + 1) * w + x]; pts.set(id, [x, y + (iso - va) / (vb - va)]); }
+      else { const vb = a[y * w + x + 1]; pts.set(id, [x + (iso - va) / (vb - va), y]); }
+    }
+    return id;
+  };
+  const link = (e1, e2) => {
+    point(e1); point(e2);
+    (adj.get(e1) || adj.set(e1, []).get(e1)).push(e2);
+    (adj.get(e2) || adj.set(e2, []).get(e2)).push(e1);
+  };
+  const Hz = (x, y) => (y * w + x) * 2;      // edge (x,y)->(x+1,y)
+  const Vt = (x, y) => (y * w + x) * 2 + 1;  // edge (x,y)->(x,y+1)
+  for (let y = 0; y < h - 1; y++) {
+    for (let x = 0; x < w - 1; x++) {
+      const c = ((a[y * w + x] >= iso) << 3) | ((a[y * w + x + 1] >= iso) << 2) |
+                ((a[(y + 1) * w + x + 1] >= iso) << 1) | (a[(y + 1) * w + x] >= iso);
+      if (c === 0 || c === 15) continue;
+      const Te = Hz(x, y), Be = Hz(x, y + 1), Le = Vt(x, y), Re = Vt(x + 1, y);
+      switch (c) {
+        case 1: case 14: link(Le, Be); break;
+        case 2: case 13: link(Be, Re); break;
+        case 3: case 12: link(Le, Re); break;
+        case 4: case 11: link(Te, Re); break;
+        case 6: case 9: link(Te, Be); break;
+        case 7: case 8: link(Le, Te); break;
+        case 5: link(Le, Be); link(Te, Re); break;
+        case 10: link(Le, Te); link(Be, Re); break;
+      }
+    }
+  }
+  const seen = new Set();
+  const loops = [];
+  for (const start of adj.keys()) {
+    if (seen.has(start)) continue;
+    const loop = [];
+    let prev = -1, cur = start;
+    for (;;) {
+      seen.add(cur);
+      loop.push(pts.get(cur).slice());
+      const [n1, n2] = adj.get(cur);
+      const next = n1 !== prev ? n1 : n2;
+      prev = cur; cur = next;
+      if (cur === start || seen.has(cur)) break;
+    }
+    loops.push(loop);
+  }
+  return loops;
+}
+
+function segDist(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const len = dx * dx + dy * dy;
+  let t = len ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+}
+function rdp(pts, eps) {
+  if (pts.length < 3) return pts.slice();
+  const a = pts[0], b = pts[pts.length - 1];
+  let dmax = 0, idx = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = segDist(pts[i], a, b);
+    if (d > dmax) { dmax = d; idx = i; }
+  }
+  if (dmax <= eps) return [a, b];
+  const left = rdp(pts.slice(0, idx + 1), eps);
+  return left.slice(0, -1).concat(rdp(pts.slice(idx), eps));
+}
+function simplifyClosed(loop, eps) {
+  let k = 0, dmax = -1;
+  for (let i = 1; i < loop.length; i++) {
+    const d = Math.hypot(loop[i][0] - loop[0][0], loop[i][1] - loop[0][1]);
+    if (d > dmax) { dmax = d; k = i; }
+  }
+  const s1 = rdp(loop.slice(0, k + 1), eps);
+  const s2 = rdp(loop.slice(k).concat([loop[0]]), eps);
+  return s1.slice(0, -1).concat(s2.slice(0, -1));
+}
+function area(l) {
+  let s = 0;
+  for (let i = 0, j = l.length - 1; i < l.length; j = i++) s += (l[j][0] + l[i][0]) * (l[j][1] - l[i][1]);
+  return s / 2;
+}
+function inside(p, l) {
+  let c = false;
+  for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
+    if ((l[i][1] > p[1]) !== (l[j][1] > p[1]) &&
+        p[0] < (l[j][0] - l[i][0]) * (p[1] - l[i][1]) / (l[j][1] - l[i][1]) + l[i][0]) c = !c;
+  }
+  return c;
+}
+
+// Returns loops in px around the pen origin on the baseline (y down):
+// pieces = solid parts with their holes, counters = the holes themselves (islands in the board).
+function traceGlyph(ch) {
+  if (glyphCache.has(ch)) return glyphCache.get(ch);
+  gctx.font = FONT;
+  const m = gctx.measureText(ch);
+  const pad = 4;
+  const left = Math.ceil(m.actualBoundingBoxLeft), right = Math.ceil(m.actualBoundingBoxRight);
+  const asc = Math.ceil(m.actualBoundingBoxAscent), desc = Math.ceil(m.actualBoundingBoxDescent);
+  const out = { pieces: [], counters: [] };
+  if (left + right <= 0 || asc + desc <= 0) { glyphCache.set(ch, out); return out; }
+  const w = left + right + pad * 2, h = asc + desc + pad * 2;
+  gcan.width = w; gcan.height = h;
+  gctx.font = FONT;
+  gctx.fillStyle = '#000';
+  gctx.fillText(ch, pad + left, pad + asc);
+  const data = gctx.getImageData(0, 0, w, h).data;
+  const a = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) a[i] = data[i * 4 + 3] / 255;
+
+  const loops = marchingSquares(a, w, h)
+    .map((l) => simplifyClosed(l, 0.45))
+    .filter((l) => l.length >= 3 && Math.abs(area(l)) > 10);
+  for (const l of loops) for (const p of l) { p[0] -= pad + left; p[1] -= pad + asc; }
+
+  const items = loops.map((l) => ({ l, a: Math.abs(area(l)), depth: 0, parent: null, holes: [] }))
+    .sort((p, q) => q.a - p.a);
+  items.forEach((it, i) => {
+    for (let j = 0; j < i; j++) {
+      if (inside(it.l[0], items[j].l)) { it.depth++; it.parent = items[j]; }
+    }
+  });
+  for (const it of items) {
+    if (it.depth % 2 === 0) out.pieces.push(it);
+    else { it.parent.holes.push(it.l); out.counters.push(it.l); }
+  }
+  out.pieces = out.pieces.map((it) => ({ outer: it.l, holes: it.holes }));
+  glyphCache.set(ch, out);
+  return out;
+}
+
+// ---- Scene build -------------------------------------------------------
+const world = new THREE.Group();
+scene.add(world);
+let letters = [];
+const block = { w: 1, h: 1 };
+
+const toV2 = (l, ox, oy) => l.map((p) => new THREE.Vector2(p[0] + ox, p[1] + oy));
+
+function clearWorld() {
+  world.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+  world.clear();
+  letters = [];
+}
+
+function build(text) {
+  clearWorld();
+  const lines = text.split('/').map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) lines.push('CUT');
+  $('sr-text').textContent = lines.join(' ');
+
+  gctx.font = FONT;
+  const capH = gctx.measureText('H').actualBoundingBoxAscent / F;
+  const lineStep = capH * 1.24;
+  const track = 0.035;
+
+  // Lay glyphs out in world units, y up. Each line is left aligned.
+  const glyphs = [];
+  lines.forEach((line, li) => {
+    const baseY = -li * lineStep;
+    [...line].forEach((ch, i) => {
+      if (/\s/.test(ch)) return;
+      gctx.font = FONT;
+      const penX = gctx.measureText(line.slice(0, i)).width / F + i * track;
+      const g = traceGlyph(ch);
+      if (!g.pieces.length) return;
+      const conv = (l) => l.map((p) => [penX + p[0] / F, baseY - p[1] / F]);
+      glyphs.push({
+        ch,
+        pieces: g.pieces.map((pc) => ({ outer: conv(pc.outer), holes: pc.holes.map(conv) })),
+        counters: g.counters.map(conv),
+      });
+    });
+  });
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const g of glyphs) for (const pc of g.pieces) for (const p of pc.outer) {
+    minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+    minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]);
+  }
+  if (!glyphs.length) { minX = minY = -0.5; maxX = maxY = 0.5; }
+  const ox = -(minX + maxX) / 2, oy = -(minY + maxY) / 2;
+  block.w = maxX - minX; block.h = maxY - minY;
+
+  // Board: one slab with every letter outline cut through it.
+  const M = 6;
+  const board = new THREE.Shape();
+  board.moveTo(-block.w / 2 - M, -block.h / 2 - M);
+  board.lineTo(block.w / 2 + M, -block.h / 2 - M);
+  board.lineTo(block.w / 2 + M, block.h / 2 + M);
+  board.lineTo(-block.w / 2 - M, block.h / 2 + M);
+  board.closePath();
+
+  for (const g of glyphs) {
+    const shapes = [];
+    let cx0 = Infinity, cx1 = -Infinity, cy0 = Infinity, cy1 = -Infinity;
+    for (const pc of g.pieces) {
+      const s = new THREE.Shape(toV2(pc.outer, ox, oy));
+      s.holes = pc.holes.map((h) => new THREE.Path(toV2(h, ox, oy)));
+      shapes.push(s);
+      board.holes.push(new THREE.Path(toV2(pc.outer, ox, oy)));
+      for (const p of pc.outer) {
+        cx0 = Math.min(cx0, p[0] + ox); cx1 = Math.max(cx1, p[0] + ox);
+        cy0 = Math.min(cy0, p[1] + oy); cy1 = Math.max(cy1, p[1] + oy);
+      }
+    }
+    const geo = new THREE.ExtrudeGeometry(shapes, {
+      depth: T - 2 * BEVEL.thickness,
+      bevelEnabled: true,
+      bevelThickness: BEVEL.thickness,
+      bevelSize: BEVEL.size,
+      bevelOffset: BEVEL.offset,
+      bevelSegments: 2,
+      curveSegments: 1,
+    });
+    geo.translate(0, 0, -(T - BEVEL.thickness));
+    const mesh = new THREE.Mesh(geo, letterMat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    world.add(mesh);
+    const L = { ch: g.ch, mesh, cx: (cx0 + cx1) / 2, cy: (cy0 + cy1) / 2, z: 0, v: 0 };
+    mesh.userData.letter = L;
+    letters.push(L);
+
+    // Counters (the inside of A, D, G...) stay put as islands of board.
+    for (const c of g.counters) {
+      const ig = new THREE.ExtrudeGeometry(new THREE.Shape(toV2(c, ox, oy)), { depth: T, bevelEnabled: false, curveSegments: 1 });
+      ig.translate(0, 0, -T);
+      const island = new THREE.Mesh(ig, boardMat);
+      island.castShadow = island.receiveShadow = true;
+      world.add(island);
+    }
+  }
+
+  const bg = new THREE.ExtrudeGeometry(board, { depth: T, bevelEnabled: false, curveSegments: 1 });
+  bg.translate(0, 0, -T);
+  const slab = new THREE.Mesh(bg, boardMat);
+  slab.castShadow = slab.receiveShadow = true;
+  world.add(slab);
+
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(block.w + 2 * M, block.h + 2 * M), boardMat);
+  back.position.z = -2.4 * T;
+  back.receiveShadow = true;
+  world.add(back);
+
+  // Shadow frustum hugs the lettering.
+  const r = Math.max(block.w, block.h) / 2 + 0.6;
+  Object.assign(key.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 0.5, far: 14 });
+  key.shadow.camera.updateProjectionMatrix();
+  key.position.set(-2.4, 2.6, 3.0);
+  key.target.position.set(0, 0, 0);
+
+  fit();
+}
+
+// ---- Camera fit --------------------------------------------------------
+let baseDist = 5;
+function fit() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  const half = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const narrow = w < 560;
+  const bw = block.w * (narrow ? 1.08 : 1.3);
+  const bh = block.h * 1.3 + (narrow ? 0.9 : 0.55); // leave room for the strips
+  baseDist = Math.max((bh / 2) / Math.tan(half), (bw / 2) / (Math.tan(half) * camera.aspect));
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', fit);
+
+// ---- Interaction -------------------------------------------------------
+const state = { mode: 'lift', travel: 1 };
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+const hit = new THREE.Vector3();
+const ptr = { x: 0, y: 0, active: false, last: -1e9 };
+const aim = new THREE.Vector2(0, 0);
+
+function pick(e) {
+  const rect = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (ray.ray.intersectPlane(plane, hit)) { ptr.x = hit.x; ptr.y = hit.y; }
+  ptr.active = true;
+  ptr.last = performance.now();
+  const hits = ray.intersectObjects(letters.map((l) => l.mesh), false);
+  return hits.length ? hits[0].object.userData.letter : null;
+}
+canvas.addEventListener('pointermove', (e) => {
+  canvas.style.cursor = pick(e) ? 'pointer' : 'default';
+});
+canvas.addEventListener('pointerdown', (e) => {
+  const L = pick(e);
+  if (L) L.v += (L.z > 0 ? -1 : 1) * 1.7;
+});
+canvas.addEventListener('pointerleave', () => { ptr.active = false; });
+
+document.querySelectorAll('.seg button').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.mode = b.dataset.mode;
+    document.querySelectorAll('.seg button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  });
+});
+$('travel').addEventListener('input', (e) => { state.travel = parseFloat(e.target.value); });
+let rebuildTimer = 0;
+$('text').addEventListener('input', (e) => {
+  clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => build(e.target.value), 350);
+});
+
+// Depth each letter wants, given the pointer.
+const R = 1.2;
+function targetZ(L) {
+  const dx = L.cx - aim.x, dy = L.cy - aim.y;
+  const f = Math.exp(-(dx * dx + dy * dy) / (R * R));
+  const s = T * state.travel;
+  if (state.mode === 'lift') return s * (-0.14 + 1.0 * f);
+  if (state.mode === 'press') return s * (0.12 - 0.98 * f);
+  return s * 0.85 * Math.tanh(dx / 0.8) * (0.4 + 0.6 * Math.exp(-(dy * dy) / (2 * R * R)));
+}
+
+// ---- Loop --------------------------------------------------------------
+const clock = new THREE.Clock();
+let t = 0;
+const readout = $('readout');
+let lastReadout = '';
+
+function frame() {
+  const dt = Math.min(clock.getDelta(), 1 / 30);
+  t += dt;
+
+  // With no pointer, a slow drift keeps the board alive.
+  const idle = !ptr.active || performance.now() - ptr.last > 2500;
+  let tx, ty;
+  if (!idle) { tx = ptr.x; ty = ptr.y; }
+  else if (reduceMotion) { tx = block.w * 0.18; ty = block.h * 0.1; }
+  else { tx = Math.sin(t * 0.37 + 0.6) * block.w * 0.42; ty = Math.sin(t * 0.53 + 1.3) * block.h * 0.4; }
+  const k = 1 - Math.exp(-dt * (idle ? 2.5 : 10));
+  aim.x += (tx - aim.x) * k;
+  aim.y += (ty - aim.y) * k;
+
+  const stiff = reduceMotion ? 40 : 70, damp = reduceMotion ? 13 : 10;
+  let near = null, nearD = Infinity;
+  for (const L of letters) {
+    L.v += (stiff * (targetZ(L) - L.z) - damp * L.v) * dt;
+    L.z += L.v * dt;
+    const lo = -0.92 * T, hi = 0.95 * T;
+    if (L.z < lo || L.z > hi) { L.z = Math.min(hi, Math.max(lo, L.z)); L.v *= -0.2; }
+    L.mesh.position.z = L.z;
+    const d = Math.hypot(L.cx - aim.x, L.cy - aim.y);
+    if (d < nearD) { nearD = d; near = L; }
+  }
+
+  camera.position.set(aim.x * 0.05 + baseDist * 0.04, aim.y * 0.05 - baseDist * 0.05, baseDist);
+  camera.lookAt(0, 0, -T * 0.5);
+
+  if (near) {
+    const mm = near.z * MM;
+    const txt = `${near.ch}  ${mm >= 0 ? '+' : '−'}${Math.abs(mm).toFixed(1).padStart(4, ' ')} mm`;
+    if (txt !== lastReadout) { readout.textContent = txt; lastReadout = txt; }
+  }
+
+  composer.render();
+  requestAnimationFrame(frame);
+}
+
+// Wait for the display face so the traced outlines use it, not the fallback.
+try { await Promise.race([document.fonts.load(FONT), new Promise((r) => setTimeout(r, 2500))]); } catch (e) {}
+build($('text').value);
+requestAnimationFrame(frame);
+</script>
+</html>
