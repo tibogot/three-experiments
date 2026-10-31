@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Cutout Type II</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one full-bleed sheet of board; hairline control strips pinned to the top and bottom edges.
+   A single paper-white world by choice, so colors are explicit and not themed. */
+:root {
+  --paper: #ecebe7;
+  --paper-raised: #f6f5f2;
+  --ink: #23221f;
+  --ink-soft: #6b685f;
+  --cut: #2f6b4f;
+  --rule: rgba(35, 34, 31, 0.14);
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --step--1: 0.6875rem;
+  --step-0: 0.8125rem;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: var(--step-0); overflow: hidden; }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.strip {
+  position: fixed; left: 0; right: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+}
+.strip > * { pointer-events: auto; }
+.top { top: 0; justify-content: space-between; padding-block: calc(14px + env(safe-area-inset-top, 0px)) 0; }
+.bottom { bottom: 0; padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px)); }
+.mark { display: flex; align-items: baseline; gap: 10px; font-family: var(--display); font-size: 0.95rem; letter-spacing: -0.01em; }
+.mark small, .label { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-soft); letter-spacing: 0.08em; text-transform: uppercase; }
+.hint { font-size: var(--step--1); color: var(--ink-soft); letter-spacing: 0.03em; max-width: 38ch; text-align: right; }
+.panel {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; width: 100%;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--paper-raised) 86%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--rule); border-radius: 6px;
+}
+.seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 4px; }
+.seg button {
+  font: inherit; font-size: var(--step--1); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-soft); background: transparent; border: 0; border-radius: 3px; padding: 6px 10px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper-raised); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.field { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.field.grow { flex: 1 1 240px; }
+.field input[type="text"] {
+  flex: 1; min-width: 0; font: inherit; font-family: var(--display); font-size: 0.9rem; letter-spacing: 0.02em;
+  color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--rule); padding: 5px 2px;
+}
+.field input[type="range"] { width: 110px; accent-color: var(--cut); }
+#readout {
+  font-variant-numeric: tabular-nums; font-size: var(--step--1); letter-spacing: 0.04em;
+  white-space: pre; min-width: 14ch; text-align: right; margin-left: auto;
+}
+button:focus-visible, input:focus-visible { outline: 2px solid var(--cut); outline-offset: 2px; }
+#notice { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 0 16px; color: var(--ink-soft); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 560px) {
+  .hint { display: none; }
+  #readout { min-width: 0; }
+  .field input[type="range"] { width: 90px; }
+}
+</style>
+
+<h1 class="sr-only" id="sr-text">THE NEW DESIGN AGE</h1>
+<p id="notice" hidden>This piece needs WebGPU or WebGL 2, which this browser doesn't provide.</p>
+<canvas id="stage" aria-hidden="true"></canvas>
+
+<header class="strip top">
+  <div class="mark">Cutout Type II <small>12&nbsp;mm board · cut flush</small></div>
+  <p class="hint">The letters sit flush in the board until you touch them. Move over the sheet to press them; click to push harder.</p>
+</header>
+
+<footer class="strip bottom">
+  <div class="panel">
+    <div class="seg" role="group" aria-label="Motion">
+      <button type="button" id="mode-press" data-mode="press" aria-pressed="true">Press</button>
+      <button type="button" id="mode-lift" data-mode="lift" aria-pressed="false">Lift</button>
+      <button type="button" id="mode-wave" data-mode="wave" aria-pressed="false">Wave</button>
+    </div>
+    <label class="field"><span class="label">Travel</span>
+      <input type="range" id="travel" min="0.3" max="1.2" step="0.05" value="1">
+    </label>
+    <label class="field grow"><span class="label">Text</span>
+      <input type="text" id="text" value="THE / NEW / DESIGN / AGE" maxlength="48" spellcheck="false" autocomplete="off" aria-describedby="text-help">
+    </label>
+    <span class="sr-only" id="text-help">Use a slash to start a new line.</span>
+    <output id="readout" aria-live="off">flush</output>
+  </div>
+</footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.tsl.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import {
+  pass, mrt, output, normalView, diffuseColor, velocity, add, vec2, vec3, vec4, float, uniform, texture, uv,
+  positionLocal, positionWorld, transformNormalToView, normalize, packNormalToRGB, unpackRGBToNormal, sample,
+  max, abs, smoothstep, mix, distance, screenUV, mx_noise_vec3, varying, modelWorldMatrix,
+} from 'three/tsl';
+import { ssgi } from 'three/addons/tsl/display/SSGINode.js';
+import { traa } from 'three/addons/tsl/display/TRAANode.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const $ = (id) => document.getElementById(id);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const small = Math.min(window.innerWidth, window.innerHeight) < 700;
+
+// ---- Units ---------------------------------------------------------------------
+// 1 world unit = 1 em of the display face. The board reads as 12 mm thick.
+const BOARD = 0.16;              // depth of a slot behind a letter that has slid aside
+const MM = 12 / BOARD;
+const DEPTH = 0.105;             // how far a fully pressed letter travels at Travel 100 %
+const SLIDE = 0.032;             // sideways give: offset = gradient of the press field × SLIDE
+const FONT_PX = 200;
+const FONT = (px) => `700 ${px}px Archivo, "Helvetica Neue", Arial, sans-serif`;
+
+// ---- Renderer --------------------------------------------------------------------
+const canvas = $('stage');
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.25 : 1.5));
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+try { await renderer.init(); }
+catch (err) { $('notice').hidden = false; canvas.hidden = true; throw err; }
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#ecebe7');
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.38;
+
+const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 200);
+
+// Warm low key light from the upper left; the cool room environment fills the shadows.
+const key = new THREE.DirectionalLight(0xfff0de, 2.7);
+key.castShadow = true;
+key.shadow.mapSize.set(4096, 4096);
+key.shadow.radius = 3;
+key.shadow.bias = -0.0002;
+key.shadow.normalBias = 0.002;
+scene.add(key, key.target);
+
+// ---- Letter mask: the text rasterised once, slightly softened -----------------------
+// The board is a single continuous surface; the mask only says where a letter is.
+const maskCanvas = document.createElement('canvas');
+const maskCtx = maskCanvas.getContext('2d');
+const maskTex = new THREE.CanvasTexture(maskCanvas);
+maskTex.generateMipmaps = false;
+maskTex.minFilter = maskTex.magFilter = THREE.LinearFilter;
+maskTex.colorSpace = THREE.NoColorSpace;
+
+const rect = { w: 4, h: 3 };                         // text rectangle in world units
+const uRect = uniform(new THREE.Vector2(4, 3));
+const uMaskTexel = uniform(new THREE.Vector2(1 / 2048, 1 / 1536));
+
+function rasterise(text) {
+  const lines = text.split('/').map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) lines.push('CUT');
+  $('sr-text').textContent = lines.join(' ');
+
+  const m = maskCtx;
+  m.font = FONT(FONT_PX);
+  const capH = m.measureText('H').actualBoundingBoxAscent / FONT_PX;
+  const lineStep = capH * 1.24, track = 0.035;
+  const layout = lines.map((line, li) => {
+    const chars = [...line].map((ch, i) => ({ ch, x: m.measureText(line.slice(0, i)).width / FONT_PX + i * track }));
+    const mm = m.measureText(line);
+    return { chars, baseline: capH + li * lineStep, width: mm.width / FONT_PX + (line.length - 1) * track,
+             left: mm.actualBoundingBoxLeft / FONT_PX, desc: mm.actualBoundingBoxDescent / FONT_PX };
+  });
+  const minX = Math.min(...layout.map((l) => -l.left));
+  const maxX = Math.max(...layout.map((l) => l.width));
+  const maxY = Math.max(...layout.map((l) => l.baseline + l.desc));
+  const pad = 0.34;
+  rect.w = maxX - minX + 2 * pad;
+  rect.h = maxY + 2 * pad;
+
+  const MW = small ? 1536 : 2048;
+  const s = MW / rect.w;
+  maskCanvas.width = MW;
+  maskCanvas.height = Math.round(rect.h * s);
+  m.fillStyle = '#000';
+  m.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+  m.filter = `blur(${(0.8 * MW / GRID_X).toFixed(2)}px)`;  // edge softness ≈ one mesh cell, so walls shade cleanly
+  m.fillStyle = '#fff';
+  m.font = FONT(s);
+  for (const l of layout) for (const c of l.chars) {
+    if (/\s/.test(c.ch)) continue;
+    m.fillText(c.ch, (c.x - minX + pad) * s, (l.baseline + pad) * s);
+  }
+  m.filter = 'none';
+  maskTex.needsUpdate = true;
+  uRect.value.set(rect.w, rect.h);
+  uMaskTexel.value.set(1 / maskCanvas.width, 1 / maskCanvas.height);
+}
+
+// ---- Press field: an elastic sheet simulated on the CPU --------------------------------
+// z is how far the letter surface is pushed (+ up, − in). Each texel is a damped spring
+// pulled toward the brush and coupled to its neighbours, so a touch presses only part
+// of a letter and the surface relaxes back to perfectly flat.
+const PW = small ? 150 : 200;
+let PH = 150;
+let z = new Float32Array(1), zv = new Float32Array(1), half = new Uint16Array(1);
+const pressTex = new THREE.DataTexture(half, 1, 1, THREE.RedFormat, THREE.HalfFloatType);
+pressTex.minFilter = pressTex.magFilter = THREE.LinearFilter;
+const uPressTexel = uniform(new THREE.Vector2(1, 1));
+
+function resetField() {
+  PH = Math.max(8, Math.round(PW * rect.h / rect.w));
+  z = new Float32Array(PW * PH); zv = new Float32Array(PW * PH); half = new Uint16Array(PW * PH);
+  pressTex.image = { data: half, width: PW, height: PH };
+  pressTex.needsUpdate = true;
+  uPressTexel.value.set(1 / PW, 1 / PH);
+  settled = true;
+}
+
+// ---- Height of the board surface (TSL) ---------------------------------------------------
+const P = (q) => texture(pressTex, q).level(0).r;
+const M = (q) => texture(maskTex, q).level(0).r;
+
+function height(q) {
+  const p = P(q);
+  const dx = vec2(uPressTexel.x, 0), dy = vec2(0, uPressTexel.y);
+  // gradient of the press field in world units
+  const gx = P(q.add(dx)).sub(P(q.sub(dx))).div(uPressTexel.x.mul(2).mul(uRect.x));
+  const gy = P(q.add(dy)).sub(P(q.sub(dy))).div(uPressTexel.y.mul(2).mul(uRect.y));
+  // the letter slides a little down the slope of the press; the slot it uncovers is deep
+  const shift = vec2(gx.div(uRect.x), gy.div(uRect.y)).mul(SLIDE);
+  const letter = M(q.sub(shift));
+  const slot = max(M(q).sub(letter), 0).mul(smoothstep(0.004, 0.03, abs(p)));
+  return letter.mul(p).sub(slot.mul(BOARD));
+}
+
+// Separate uv() nodes per stage: a node shared by the vertex and fragment stages reads back zero in the vertex stage.
+const displaced = positionLocal.add(vec3(0, 0, height(uv())));
+const boardUV = uv();
+
+// Normal from the same height field, one mask texel apart: crisp walls on a smooth mesh.
+const h0 = height(boardUV);
+const hx = height(boardUV.add(vec2(uMaskTexel.x, 0)));
+const hy = height(boardUV.add(vec2(0, uMaskTexel.y)));
+const slope = vec2(hx.sub(h0).div(uMaskTexel.x.mul(uRect.x)), hy.sub(h0).div(uMaskTexel.y.mul(uRect.y)));
+
+// Paper grain, continuous across both meshes so nothing marks where the text area ends.
+const grain = mx_noise_vec3(vec3(positionWorld.xy.mul(420), 0.5)).xy.mul(0.018)
+  .add(mx_noise_vec3(vec3(positionWorld.xy.mul(55), 2.5)).xy.mul(0.006));
+
+const paper = { color: 0xf1f0ec, roughness: 0.86, metalness: 0 };
+const letterMat = new THREE.MeshStandardNodeMaterial(paper);
+letterMat.positionNode = displaced;
+letterMat.castShadowPositionNode = displaced;
+// Receivers must look up shadows at the displaced point, or a pressed floor tests as if it were still flush.
+letterMat.receivedShadowPositionNode = varying(modelWorldMatrix.mul(vec4(displaced, 1)).xyz);
+letterMat.normalNode = transformNormalToView(normalize(vec3(slope.negate().add(grain), 1)));
+
+const sheetMat = new THREE.MeshStandardNodeMaterial(paper);
+sheetMat.normalNode = transformNormalToView(normalize(vec3(grain, 1)));
+
+// ---- Meshes ------------------------------------------------------------------------------
+const GRID_X = small ? 640 : 1024;
+let textMesh = null;
+// The surrounding sheet has a hole under the text, a little inside the text mesh's edge, so pressed
+// letters can sink below it; the overlap band is flat on both and sits a hair lower, so no seam shows.
+const sheet = new THREE.Mesh(new THREE.BufferGeometry(), sheetMat);
+sheet.position.z = -0.0004;
+sheet.receiveShadow = true;
+scene.add(sheet);
+function buildSheet() {
+  const outer = new THREE.Shape();
+  outer.moveTo(-60, -40); outer.lineTo(60, -40); outer.lineTo(60, 40); outer.lineTo(-60, 40); outer.closePath();
+  const hw = rect.w / 2 - 0.08, hh = rect.h / 2 - 0.08;
+  const hole = new THREE.Path();
+  hole.moveTo(-hw, -hh); hole.lineTo(-hw, hh); hole.lineTo(hw, hh); hole.lineTo(hw, -hh); hole.closePath();
+  outer.holes.push(hole);
+  sheet.geometry.dispose();
+  sheet.geometry = new THREE.ShapeGeometry(outer);
+}
+
+function build(text) {
+  rasterise(text);
+  resetField();
+  buildSheet();
+  if (textMesh) { textMesh.geometry.dispose(); scene.remove(textMesh); }
+  const gy = Math.round(GRID_X * rect.h / rect.w);
+  textMesh = new THREE.Mesh(new THREE.PlaneGeometry(rect.w, rect.h, GRID_X, gy), letterMat);
+  textMesh.castShadow = textMesh.receiveShadow = true;
+  scene.add(textMesh);
+
+  const r = Math.max(rect.w, rect.h) / 2 + 0.6;
+  Object.assign(key.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 0.5, far: 20 });
+  key.shadow.camera.updateProjectionMatrix();
+  key.position.set(-3.2, 3.6, 4.4);
+  fit();
+}
+
+// ---- Post: SSGI for bounce light and contact occlusion, TRAA to resolve it -----------------
+const pipeline = new THREE.RenderPipeline(renderer);
+const scenePass = pass(scene, camera);
+scenePass.setMRT(mrt({ output, diffuseColor, normal: packNormalToRGB(normalView), velocity }));
+const sceneColor = scenePass.getTextureNode('output');
+const sceneDiffuse = scenePass.getTextureNode('diffuseColor');
+const sceneDepth = scenePass.getTextureNode('depth');
+const sceneVelocity = scenePass.getTextureNode('velocity');
+scenePass.getTexture('diffuseColor').type = THREE.UnsignedByteType;
+scenePass.getTexture('normal').type = THREE.UnsignedByteType;
+const sceneNormal = sample((q) => unpackRGBToNormal(scenePass.getTextureNode('normal').sample(q)));
+
+const gi = ssgi(sceneColor, sceneDepth, sceneNormal, camera);
+gi.sliceCount.value = small ? 1 : 2;
+gi.stepCount.value = small ? 8 : 12;
+gi.radius.value = 6;
+gi.thickness.value = 0.12;
+gi.giIntensity.value = 3;
+gi.aoIntensity.value = 1.15;
+const lit = vec4(add(sceneColor.rgb.mul(gi.getAONode()), sceneDiffuse.rgb.mul(gi.getGINode().rgb)), sceneColor.a);
+const resolved = traa(lit, sceneDepth, sceneVelocity, camera);
+const vignette = mix(float(0.9), float(1), smoothstep(0.85, 0.25, distance(screenUV, vec2(0.5))));
+pipeline.outputNode = vec4(resolved.rgb.mul(vignette), resolved.a);
+
+// ---- Camera --------------------------------------------------------------------------------
+let baseDist = 6;
+function fit() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  const half = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const narrow = w < 560;
+  const bw = rect.w * (narrow ? 1.02 : 1.18);
+  const bh = rect.h * 1.18 + (narrow ? 0.9 : 0.55);
+  baseDist = Math.max((bh / 2) / Math.tan(half), (bw / 2) / (Math.tan(half) * camera.aspect));
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', fit);
+
+// ---- Interaction ---------------------------------------------------------------------------
+const state = { mode: 'press', travel: 1 };
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), hit = new THREE.Vector3();
+const ptr = { x: 0, y: 0, over: false, last: -1e9 };
+const brush = { x: 0, y: 0, act: 0 };
+const parallax = new THREE.Vector2(), parallaxGoal = new THREE.Vector2();
+let settled = true;
+
+function toBoard(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  parallaxGoal.copy(ndc);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.ray.intersectPlane(plane, hit)) return false;
+  ptr.x = hit.x; ptr.y = hit.y; ptr.last = performance.now();
+  ptr.over = Math.abs(hit.x) < rect.w / 2 + 0.3 && Math.abs(hit.y) < rect.h / 2 + 0.3;
+  return true;
+}
+canvas.addEventListener('pointermove', (e) => { toBoard(e); });
+canvas.addEventListener('pointerleave', () => { ptr.over = false; parallaxGoal.set(0, 0); });
+canvas.addEventListener('pointerdown', (e) => {
+  if (!toBoard(e)) return;
+  // A click is a sharp, small push: an impulse into the springs under the pointer.
+  const dir = state.mode === 'lift' ? 1 : -1;
+  kick(hit.x, hit.y, 0.16, dir * 2.4 * state.travel);
+});
+
+function kick(x, y, radius, strength) {
+  const cx = (x + rect.w / 2) / rect.w * PW, cy = (y + rect.h / 2) / rect.h * PH;
+  const rr = radius / rect.w * PW, span = Math.ceil(rr * 2.5);
+  for (let j = Math.max(0, Math.floor(cy - span)); j < Math.min(PH, cy + span); j++) {
+    for (let i = Math.max(0, Math.floor(cx - span)); i < Math.min(PW, cx + span); i++) {
+      const d2 = ((i + 0.5 - cx) ** 2 + (j + 0.5 - cy) ** 2) / (rr * rr);
+      zv[j * PW + i] += strength * Math.exp(-d2);
+    }
+  }
+  settled = false;
+}
+
+document.querySelectorAll('.seg button').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.mode = b.dataset.mode;
+    document.querySelectorAll('.seg button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  });
+});
+$('travel').addEventListener('input', (e) => { state.travel = parseFloat(e.target.value); });
+let rebuildTimer = 0;
+$('text').addEventListener('input', (e) => {
+  clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => build(e.target.value), 350);
+});
+
+// ---- Simulation ----------------------------------------------------------------------------
+const R = 0.3;                    // brush radius: smaller than a letter, so only part of it moves
+const K = 95, DAMP = reduceMotion ? 22 : 13, TENSION = 55;
+
+function target(x, y) {
+  if (brush.act <= 0) return 0;
+  const dx = x - brush.x, dy = y - brush.y;
+  const a = DEPTH * state.travel * brush.act;
+  if (state.mode === 'wave') {
+    const env = Math.exp(-(dx * dx) / (2 * 0.9 * 0.9) - (dy * dy) / (2 * 0.55 * 0.55));
+    return a * 0.9 * Math.tanh(dx / 0.3) * env;
+  }
+  const g = Math.exp(-(dx * dx + dy * dy) / (R * R));
+  return state.mode === 'lift' ? a * 0.8 * g : -a * g;
+}
+
+function simulate(dt) {
+  const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+  const h = dt / steps;
+  let peak = 0;
+  for (let s = 0; s < steps; s++) {
+    for (let j = 0; j < PH; j++) {
+      const y = (j + 0.5) / PH * rect.h - rect.h / 2;
+      for (let i = 0; i < PW; i++) {
+        const k = j * PW + i;
+        const x = (i + 0.5) / PW * rect.w - rect.w / 2;
+        const zc = z[k];
+        const lap = (i > 0 ? z[k - 1] : zc) + (i < PW - 1 ? z[k + 1] : zc) +
+                    (j > 0 ? z[k - PW] : zc) + (j < PH - 1 ? z[k + PW] : zc) - 4 * zc;
+        zv[k] += (K * (target(x, y) - zc) + TENSION * lap - DAMP * zv[k]) * h;
+      }
+    }
+    for (let k = 0; k < z.length; k++) {
+      z[k] += zv[k] * h;
+      if (z[k] > BOARD) { z[k] = BOARD; zv[k] = 0; }
+      if (z[k] < -BOARD * 0.9) { z[k] = -BOARD * 0.9; zv[k] = 0; }
+    }
+  }
+  for (let k = 0; k < z.length; k++) {
+    peak = Math.max(peak, Math.abs(z[k]), Math.abs(zv[k]) * 0.05);
+    half[k] = THREE.DataUtils.toHalfFloat(z[k]);
+  }
+  // Once everything is back within a hair of flat, snap to exactly flat: no seams at rest.
+  if (peak < 2e-5 && brush.act === 0) {
+    z.fill(0); zv.fill(0); half.fill(0);
+    settled = true;
+  }
+  pressTex.needsUpdate = true;
+}
+
+// ---- Loop ----------------------------------------------------------------------------------
+const readout = $('readout');
+let lastReadout = '', prev = performance.now(), introT = reduceMotion ? 1 : 0;
+
+renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  const dt = Math.min((now - prev) / 1000, 1 / 30);
+  prev = now;
+
+  // A single slow pass across the sheet on load shows what is hidden in it, then it settles flat.
+  let bx, by, want = 0;
+  if (introT < 1) {
+    introT = Math.min(1, introT + dt / 3.2);
+    const e = introT * introT * (3 - 2 * introT);
+    bx = -rect.w * 0.62 + e * rect.w * 1.24;
+    by = Math.sin(e * Math.PI * 1.5) * rect.h * 0.22;
+    want = Math.sin(Math.PI * Math.min(1, introT * 1.1));
+  } else if (ptr.over && now - ptr.last < 1800) {
+    bx = ptr.x; by = ptr.y; want = 1;
+  } else {
+    bx = brush.x; by = brush.y;
+  }
+  const follow = 1 - Math.exp(-dt * (introT < 1 ? 30 : 14));
+  brush.x += (bx - brush.x) * follow;
+  brush.y += (by - brush.y) * follow;
+  brush.act += (want - brush.act) * (1 - Math.exp(-dt * (want > brush.act ? 8 : 2.5)));
+  if (want === 0 && brush.act < 0.002) brush.act = 0;
+  if (brush.act > 0) settled = false;
+  if (!settled) simulate(dt);
+
+  // Readout: the surface depth under the brush, in millimetres of board.
+  const gi_ = Math.min(PW - 1, Math.max(0, Math.floor((brush.x + rect.w / 2) / rect.w * PW)));
+  const gj_ = Math.min(PH - 1, Math.max(0, Math.floor((brush.y + rect.h / 2) / rect.h * PH)));
+  const mm = z[gj_ * PW + gi_] * MM;
+  const txt = Math.abs(mm) < 0.05 ? 'flush' : `${mm > 0 ? '+' : '−'}${Math.abs(mm).toFixed(1).padStart(4, ' ')} mm`;
+  if (txt !== lastReadout) { readout.textContent = txt; lastReadout = txt; }
+
+  parallax.lerp(parallaxGoal, 1 - Math.exp(-dt * 2));
+  const px = reduceMotion ? 0 : parallax.x * 0.05 * baseDist;
+  const py = reduceMotion ? 0 : parallax.y * 0.035 * baseDist;
+  camera.position.set(baseDist * 0.14 + px, -baseDist * 0.05 + py, baseDist);
+  camera.lookAt(0, 0, 0);
+
+  pipeline.render();
+});
+
+try { await Promise.race([document.fonts.load(FONT(FONT_PX)), new Promise((r) => setTimeout(r, 2500))]); } catch (e) {}
+build($('text').value);
+</script>
+</html>
